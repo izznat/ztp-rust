@@ -1,0 +1,5 @@
+[pre-commit]
+jobs = [
+    { name = "lint", run = "cargo clippy -- -D warnings" },
+    { name = "format", run = "cargo fmt -- --check" }
+]
