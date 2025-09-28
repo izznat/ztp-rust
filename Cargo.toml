@@ -8,5 +8,18 @@ path = "src/lib.rs"
 
 [dependencies]
 actix-web = "4"
+config = "0.15.17"
 reqwest = "0.12.23"
+serde = { version = "1.0.226", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+uuid = { version = "1.18.1", features = ["v7"] }
+
+[dependencies.sqlx]
+version = "0.8.6"
+features = [
+    "runtime-tokio-rustls",
+    "macros",
+    "postgres",
+    "uuid",
+    "chrono"
+]
