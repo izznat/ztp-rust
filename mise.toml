@@ -11,3 +11,7 @@ APP__DATABASE__PASSWORD = "ztp"
 
 # `sqlx` configuration.
 DATABASE_URL = "postgres://{{env.APP__DATABASE__USER}}:{{env.APP__DATABASE__PASSWORD}}@{{env.APP__DATABASE__HOST}}:{{env.APP__DATABASE__PORT}}/{{env.APP__DATABASE__NAME}}"
+
+[tasks]
+dev = "cargo run"
+test = "cargo test --test '*'"
