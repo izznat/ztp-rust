@@ -1,13 +1,19 @@
 use secrecy::{ExposeSecret, SecretString};
 
 #[derive(serde::Deserialize)]
-pub struct Settings {
+pub struct Configuration {
+    pub application: ApplicationConfiguration,
+    pub database: DatabaseConfiguration,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ApplicationConfiguration {
+    pub host: String,
     pub port: u16,
-    pub database: DatabaseSettings,
 }
 
 #[derive(serde::Deserialize, Clone)]
-pub struct DatabaseSettings {
+pub struct DatabaseConfiguration {
     pub user: String,
     pub password: SecretString,
     pub host: String,
@@ -15,7 +21,7 @@ pub struct DatabaseSettings {
     pub name: String,
 }
 
-impl DatabaseSettings {
+impl DatabaseConfiguration {
     pub fn connection_string(&self) -> SecretString {
         SecretString::from(format!(
             "postgres://{}:{}@{}:{}/{}",
@@ -38,14 +44,17 @@ impl DatabaseSettings {
     }
 }
 
-pub fn get_configuration() -> Result<Settings, config::ConfigError> {
-    // Initialize our configuration reader.
-    let settings = config::Config::builder()
-        // Add configuration values from a file named `configuration.yaml`.
+pub fn get_configuration() -> Result<Configuration, config::ConfigError> {
+    let current_directory =
+        std::env::current_dir().expect("Failed to determine the current directory.");
+    let configuration_directory = current_directory.join("configuration");
+
+    let configuration = config::Config::builder()
+        .add_source(config::File::from(
+            configuration_directory.join("base.toml"),
+        ))
         .add_source(config::Environment::default().separator("__").prefix("APP"))
         .build()?;
 
-    // Try to convert configuration values it read into
-    // our Settings type.
-    settings.try_deserialize::<Settings>()
+    configuration.try_deserialize::<Configuration>()
 }

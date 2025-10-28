@@ -3,7 +3,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::{net::TcpListener, sync::LazyLock};
 use uuid::Uuid;
 use ztp::{
-    configuration::{DatabaseSettings, get_configuration},
+    configuration::{DatabaseConfiguration, get_configuration},
     telemetry::{get_subscriber, init_subscriber},
 };
 
@@ -113,23 +113,26 @@ async fn spawn_app() -> TestApp {
     }
 }
 
-async fn configure_database(settings: &DatabaseSettings) -> PgPool {
-    let maintenance_settings = DatabaseSettings {
+async fn configure_database(configuration: &DatabaseConfiguration) -> PgPool {
+    let maintenance_configuration = DatabaseConfiguration {
         name: "postgres".to_string(),
-        ..settings.clone()
+        ..configuration.clone()
     };
 
-    let mut maintenance_connection =
-        PgConnection::connect(&maintenance_settings.connection_string().expose_secret())
-            .await
-            .expect("Failed to connect to Postgres.");
+    let mut maintenance_connection = PgConnection::connect(
+        &maintenance_configuration
+            .connection_string()
+            .expose_secret(),
+    )
+    .await
+    .expect("Failed to connect to Postgres.");
     maintenance_connection
-        .execute(format!(r#"create database "{}";"#, settings.name).as_str())
+        .execute(format!(r#"create database "{}";"#, configuration.name).as_str())
         .await
         .expect("Failed to create database");
 
     // Migrate database.
-    let connection_pool = PgPool::connect(&settings.connection_string().expose_secret())
+    let connection_pool = PgPool::connect(&configuration.connection_string().expose_secret())
         .await
         .expect("Failed to connect to Postgres");
 

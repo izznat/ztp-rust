@@ -1,6 +1,5 @@
 [env]
 # App configuration.
-APP__PORT = 8000
 APP__DATABASE__HOST = "127.0.0.1"
 APP__DATABASE__PORT = 5432
 APP__DATABASE__NAME = "ztp"
