@@ -1,13 +1,20 @@
-use std::net::TcpListener;
+use secrecy::{ExposeSecret, SecretString};
+use sqlx::{Connection, Executor, PgConnection, PgPool};
+use std::{net::TcpListener, sync::LazyLock};
+use uuid::Uuid;
+use ztp::{
+    configuration::{DatabaseSettings, get_configuration},
+    telemetry::{get_subscriber, init_subscriber},
+};
 
 #[tokio::test]
 async fn health_check_works() {
-    let host = spawn_app();
+    let app = spawn_app().await;
 
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("{}/health_check", host))
+        .get(format!("{}/health_check", app.address))
         .send()
         .await
         .expect("Failed to execute request.");
@@ -18,12 +25,12 @@ async fn health_check_works() {
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     let response = client
-        .post(format!("{}/subscriptions", address))
+        .post(format!("{}/subscriptions", app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -31,11 +38,19 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .expect("Failed to execute request.");
 
     assert_eq!(200, response.status().as_u16());
+
+    let saved = sqlx::query!("select email, name from subscriptions")
+        .fetch_one(&app.connection_pool)
+        .await
+        .expect("Failed to fetch saved subscription.");
+
+    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
+    assert_eq!(saved.name, "le guin");
 }
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let cases = vec![
@@ -46,7 +61,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 
     for (invalid_body, error_message) in cases {
         let response = client
-            .post(format!("{}/subscriptions", address))
+            .post(format!("{}/subscriptions", app.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(invalid_body)
             .send()
@@ -62,11 +77,66 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
-fn spawn_app() -> String {
+static TRACING: LazyLock<()> = LazyLock::new(|| {
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::sink);
+        init_subscriber(subscriber);
+    }
+});
+
+pub struct TestApp {
+    pub address: String,
+    pub connection_pool: PgPool,
+}
+
+async fn spawn_app() -> TestApp {
+    LazyLock::force(&TRACING);
+
+    let mut configuration = get_configuration().expect("Failed to read configuration.");
+    configuration.database.name = Uuid::now_v7().into();
+    configuration.database.user = "postgres".into();
+    configuration.database.password = SecretString::from("password");
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port.");
     let port = listener.local_addr().unwrap().port();
-    let server = ztp::startup::run(listener).expect("Failed to bind address.");
+    let connection_pool = configure_database(&configuration.database).await;
+    let server =
+        ztp::startup::run(listener, connection_pool.clone()).expect("Failed to bind address.");
     let _ = tokio::spawn(server);
 
-    format!("http://127.0.0.1:{}", port)
+    TestApp {
+        address: format!("http://127.0.0.1:{}", port),
+        connection_pool: connection_pool.clone(),
+    }
+}
+
+async fn configure_database(settings: &DatabaseSettings) -> PgPool {
+    let maintenance_settings = DatabaseSettings {
+        name: "postgres".to_string(),
+        ..settings.clone()
+    };
+
+    let mut maintenance_connection =
+        PgConnection::connect(&maintenance_settings.connection_string().expose_secret())
+            .await
+            .expect("Failed to connect to Postgres.");
+    maintenance_connection
+        .execute(format!(r#"create database "{}";"#, settings.name).as_str())
+        .await
+        .expect("Failed to create database");
+
+    // Migrate database.
+    let connection_pool = PgPool::connect(&settings.connection_string().expose_secret())
+        .await
+        .expect("Failed to connect to Postgres");
+
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Failed to migrate the database.");
+
+    connection_pool
 }

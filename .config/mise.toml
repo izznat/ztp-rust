@@ -14,4 +14,4 @@ DATABASE_URL = "postgres://{{env.APP__DATABASE__USER}}:{{env.APP__DATABASE__PASS
 
 [tasks]
 dev = "cargo run"
-test = "cargo test --test '*'"
+test = "cargo nextest run"
