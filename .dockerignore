@@ -1,8 +1,9 @@
 /.config/
-/migrations/
 /mise-tasks/
 /target/
 /tests/
 .env
 Dockerfile
 fly.toml
+*.db
+*.db-*

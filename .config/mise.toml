@@ -1,15 +1,6 @@
 [env]
-# App configuration.
-APP__DATABASE__HOST = "127.0.0.1"
-APP__DATABASE__PORT = 5432
-APP__DATABASE__NAME = "ztp"
-APP__DATABASE__ROOT_USER = "postgres"
-APP__DATABASE__ROOT_PASSWORD = "password"
-APP__DATABASE__USER = "ztp"
-APP__DATABASE__PASSWORD = "ztp"
-
-# `sqlx` configuration.
-DATABASE_URL = "postgres://{{env.APP__DATABASE__USER}}:{{env.APP__DATABASE__PASSWORD}}@{{env.APP__DATABASE__HOST}}:{{env.APP__DATABASE__PORT}}/{{env.APP__DATABASE__NAME}}"
+APP__DATABASE__PATH = 'ztp.db'
+DATABASE_URL = 'sqlite:{{env.APP__DATABASE__PATH}}'
 
 [tasks]
 dev = "cargo run"

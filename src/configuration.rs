@@ -1,5 +1,3 @@
-use secrecy::{ExposeSecret, SecretString};
-
 #[derive(serde::Deserialize)]
 pub struct Configuration {
     pub application: ApplicationConfiguration,
@@ -14,33 +12,12 @@ pub struct ApplicationConfiguration {
 
 #[derive(serde::Deserialize, Clone)]
 pub struct DatabaseConfiguration {
-    pub user: String,
-    pub password: SecretString,
-    pub host: String,
-    pub port: u16,
-    pub name: String,
+    pub path: String,
 }
 
 impl DatabaseConfiguration {
-    pub fn connection_string(&self) -> SecretString {
-        SecretString::from(format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.user,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-            self.name
-        ))
-    }
-
-    pub fn connection_string_without_db(&self) -> SecretString {
-        SecretString::from(format!(
-            "postgres://{}:{}@{}:{}",
-            self.user,
-            self.password.expose_secret(),
-            self.host,
-            self.port
-        ))
+    pub fn get_database_url(&self) -> String {
+        format!("sqlite:{}", self.path)
     }
 }
 

@@ -1,11 +1,7 @@
-use secrecy::{ExposeSecret, SecretString};
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use sqlx::SqlitePool;
 use std::{net::TcpListener, sync::LazyLock};
 use uuid::Uuid;
-use ztp::{
-    configuration::{DatabaseConfiguration, get_configuration},
-    telemetry::{get_subscriber, init_subscriber},
-};
+use ztp::telemetry::{get_subscriber, init_subscriber};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -89,20 +85,15 @@ static TRACING: LazyLock<()> = LazyLock::new(|| {
 
 pub struct TestApp {
     pub address: String,
-    pub connection_pool: PgPool,
+    pub connection_pool: SqlitePool,
 }
 
 async fn spawn_app() -> TestApp {
     LazyLock::force(&TRACING);
 
-    let mut configuration = get_configuration().expect("Failed to read configuration.");
-    configuration.database.name = Uuid::now_v7().into();
-    configuration.database.user = "postgres".into();
-    configuration.database.password = SecretString::from("password");
-
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port.");
     let port = listener.local_addr().unwrap().port();
-    let connection_pool = configure_database(&configuration.database).await;
+    let connection_pool = configure_database().await;
     let server =
         ztp::startup::run(listener, connection_pool.clone()).expect("Failed to bind address.");
     let _ = tokio::spawn(server);
@@ -113,28 +104,14 @@ async fn spawn_app() -> TestApp {
     }
 }
 
-async fn configure_database(configuration: &DatabaseConfiguration) -> PgPool {
-    let maintenance_configuration = DatabaseConfiguration {
-        name: "postgres".to_string(),
-        ..configuration.clone()
-    };
+async fn configure_database() -> SqlitePool {
+    let random_string: String = Uuid::now_v7().into();
+    std::fs::File::create(format!("/tmp/{}.db", random_string))
+        .expect("Failed to create test database file.");
 
-    let mut maintenance_connection = PgConnection::connect(
-        &maintenance_configuration
-            .connection_string()
-            .expose_secret(),
-    )
-    .await
-    .expect("Failed to connect to Postgres.");
-    maintenance_connection
-        .execute(format!(r#"create database "{}";"#, configuration.name).as_str())
+    let connection_pool = SqlitePool::connect(&format!("sqlite:/tmp/{}.db", random_string))
         .await
-        .expect("Failed to create database");
-
-    // Migrate database.
-    let connection_pool = PgPool::connect(&configuration.connection_string().expose_secret())
-        .await
-        .expect("Failed to connect to Postgres");
+        .expect("Failed to connect to Sqlite");
 
     sqlx::migrate!("./migrations")
         .run(&connection_pool)

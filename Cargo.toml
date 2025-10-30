@@ -23,11 +23,12 @@ tracing-subscriber = { version = "0.3.20", features = ["registry", "env-filter"]
 uuid = { version = "1.18.1", features = ["v7"] }
 
 [dependencies.sqlx]
-version = "0.8.6"
+version = "0.9.0-alpha.1"
 features = [
-    "runtime-tokio-rustls",
+    "sqlite",
+    "chrono",
     "macros",
-    "postgres",
-    "uuid",
-    "chrono"
+    "runtime-tokio",
+    "sqlx-toml",
+    "uuid"
 ]
